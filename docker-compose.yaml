@@ -1,0 +1,102 @@
+# airflow deployment
+services:
+  airflow-webserver:
+    env_file: ".env"
+    container_name: airflow-api-server
+    build: .
+    restart: unless-stopped
+    command: > 
+      bash -c "airflow db migrate && airflow api-server"
+    environment:
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      AIRFLOW__CORE__EXTERNAL_DB_MANAGERS: airflow.providers.fab.auth_manager.models.db.FABDBManager
+      
+      AIRFLOW__API__SECRET_KEY: ${AIRFLOW_API_SERVER_SECRET_KEY}
+      AIRFLOW__API__SESSION_BACKEND: 'airflow.api.auth.backend.sql_alchemy'
+      
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY}
+      AIRFLOW__WEBSERVER__SESSION_BACKEND: 'airflow.api.auth.backend.sql_alchemy'
+      
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW_META_BASE_URL}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_SCHEMA: public
+      
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-apiserver:8080/execution/'
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: 'Europe/Paris'
+      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "True"
+      AIRFLOW__WEBSERVER__AUTHENTICATE: "true"
+      AIRFLOW__WEBSERVER__RBAC: "true"
+    ports: 
+      - "8080:8080"
+    volumes:
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/plugins:/opt/airflow/plugins
+    networks:
+      - airflow-net
+  
+  airflow-scheduler:
+    env_file: ".env"
+    container_name: airflow-scheduler
+    build: .
+    restart: unless-stopped
+    command: bash -c "airflow scheduler"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW_META_BASE_URL}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_SCHEMA: public
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: 'Europe/Paris'
+    volumes:
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/plugins:/opt/airflow/plugins
+    networks:
+      - airflow-net
+  
+  airflow-dag-processor:
+    env_file: ".env"
+    container_name: airflow-dag-processor
+    build: .
+    restart: unless-stopped
+    command: bash -c "airflow dag-processor"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW_META_BASE_URL}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_SCHEMA: public
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+    volumes:
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/plugins:/opt/airflow/plugins
+    networks:
+      - airflow-net
+
+  airflow-triggerer:
+    env_file: ".env"
+    container_name: airflow-triggerer
+    build: .
+    restart: unless-stopped
+    command: bash -c "airflow triggerer"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW_META_BASE_URL}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_SCHEMA: public
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY}
+    volumes:
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/dags:/opt/airflow/dags
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/logs:/opt/airflow/logs
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/config:/opt/airflow/config
+      - ${AIRFLOW_PROJECT_HOME_DIRECTORY}/plugins:/opt/airflow/plugins
+    networks:
+      - airflow-net
+
+networks:
+  airflow-net:
+    driver: bridge
