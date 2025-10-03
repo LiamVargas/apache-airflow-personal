@@ -1,3 +1,9 @@
 dags/__pycache__/
+dags/group.py
+dags/sql.py
+dags/user_processing.py
+my-sdk/
+dags/user.py
 .env
 logs/
+.idea/
