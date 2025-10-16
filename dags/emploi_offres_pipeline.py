@@ -1,4 +1,4 @@
-from airflow.sdk import DAG, task
+from airflow.sdk import DAG
 from airflow.models import Variable
 from datetime import datetime
 from airflow.providers.standard.operators.python import PythonOperator, BranchPythonOperator
@@ -34,7 +34,7 @@ def _get_appellation_ids(ti):
     ids = g_sheets_hook.get_values(
         spreadsheet_id=Variable.get(
             'france_travail_gsuite_appellations',
-            deserialize_json=True).get('gsheet_id'), # variable en airflow
+            deserialize_json=True).get('gsheet_id'),
         range_=Variable.get(
             'france_travail_gsuite_appellations',
             deserialize_json=True).get('range')
@@ -46,8 +46,6 @@ def _get_appellation_ids(ti):
     else:
         raise AirflowSkipException()
 
-
- 
 
 with DAG(
     dag_id='emploi_offres_pipeline',
@@ -95,6 +93,7 @@ with DAG(
         ]
     )
 
+
     start_offres_container_or2 = DockerOperator(
         task_id='start_offres_container_or2',
         wait_for_downstream=True,
@@ -119,5 +118,6 @@ with DAG(
             Mount(source='/home/liamv/python_projects/emploi_project/downloads', target='/downloads/', type='bind')
         ],
     )
+
 
     check_appellation_gsheets_exist >> get_appellation_ids >> [start_offres_container_or1, start_offres_container_or2]
