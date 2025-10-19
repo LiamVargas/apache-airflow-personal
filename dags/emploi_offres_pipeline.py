@@ -5,6 +5,7 @@ from airflow.providers.standard.operators.python import PythonOperator, BranchPy
 from airflow.providers.google.suite.hooks.drive import GoogleDriveHook
 from airflow.providers.google.suite.hooks.sheets import GSheetsHook
 from airflow.providers.docker.operators.docker import DockerOperator
+from airflow.providers.amazon.aws.transfers.local_to_s3 import LocalFilesystemToS3Operator
 from airflow.exceptions import AirflowSkipException
 from docker.types import Mount
 
@@ -120,4 +121,14 @@ with DAG(
     )
 
 
-    check_appellation_gsheets_exist >> get_appellation_ids >> [start_offres_container_or1, start_offres_container_or2]
+    store_raw_offres_to_s3 = LocalFilesystemToS3Operator(
+        task_id='store_raw_offres_to_s3',
+        filename='/opt/airflow/frt_offres_download/france_travail_raw_2025.jsonl',
+        dest_key='s3://amzn-s3-frt-offres/raw/france_travail_raw_2025.jsonl',
+        aws_conn_id='aws_ak__exerani_eop',
+        replace=True,
+        gzip=False
+    )
+
+
+    check_appellation_gsheets_exist >> get_appellation_ids >> [start_offres_container_or1, start_offres_container_or2] >> store_raw_offres_to_s3

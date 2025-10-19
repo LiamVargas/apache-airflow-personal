@@ -23,6 +23,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - /var/run/docker.sock:/var/run/docker.sock
+    - /home/liamv/python_projects/emploi_project/downloads:/opt/airflow/frt_offres_download # Solucion Temporal
   user: "1001:0"
   group_add:
     - 961
