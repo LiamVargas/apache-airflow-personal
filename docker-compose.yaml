@@ -27,6 +27,13 @@ x-airflow-common:
   user: "1001:0"
   group_add:
     - 961
+  cap_drop:
+    - ALL
+  cap_add:
+    - CHOWN
+    - DAC_OVERRIDE
+    - SETGID
+    - SETUID
 
 services:
   airflow-apiserver:
