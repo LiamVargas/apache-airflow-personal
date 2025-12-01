@@ -1,6 +1,8 @@
 from airflow.sdk import DAG
 from airflow.models import Variable
+from airflow.sdk import chain
 from datetime import datetime
+import pendulum
 from airflow.providers.standard.operators.python import PythonOperator, BranchPythonOperator
 from airflow.providers.google.suite.hooks.drive import GoogleDriveHook
 from airflow.providers.google.suite.hooks.sheets import GSheetsHook
@@ -48,13 +50,13 @@ def _get_appellation_ids(ti):
         raise AirflowSkipException()
 
 
-with DAG(
+with (DAG(
     dag_id='emploi_offres_pipeline',
     schedule='@daily',
     start_date=datetime(2025, 10, 14),
     catchup=True,
     max_active_runs=1,
-) as dag:
+) as dag):
 
 
     check_appellation_gsheets_exist = BranchPythonOperator(
@@ -131,4 +133,19 @@ with DAG(
     )
 
 
-    check_appellation_gsheets_exist >> get_appellation_ids >> [start_offres_container_or1, start_offres_container_or2] >> store_raw_offres_to_s3
+    store_daily_new_id_registry = LocalFilesystemToS3Operator(
+        task_id='store_daily_new_id_registry',
+        filename="/opt/airflow/frt_offres_download/id_registry_{{ dag_run.logical_date | ds_nodash }}.csv",
+        dest_key="s3://amzn-s3-frt-offres/raw/id_registry_{{ dag_run.logical_date | ds_nodash }}.csv",
+        aws_conn_id='aws_ak__exerani_eop',
+        replace=True,
+        gzip=False
+    )
+
+
+    chain(
+        check_appellation_gsheets_exist,
+        get_appellation_ids,
+        [start_offres_container_or1, start_offres_container_or2],
+        [store_raw_offres_to_s3, store_daily_new_id_registry]
+    )
