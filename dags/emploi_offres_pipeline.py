@@ -1,6 +1,5 @@
-from airflow.sdk import DAG
+from airflow.sdk import DAG, TaskGroup
 from airflow.models import Variable
-from airflow.sdk import chain
 from datetime import datetime
 import pendulum
 from airflow.providers.standard.operators.python import PythonOperator, BranchPythonOperator
@@ -50,13 +49,13 @@ def _get_appellation_ids(ti):
         raise AirflowSkipException()
 
 
-with (DAG(
+with DAG(
     dag_id='emploi_offres_pipeline',
-    schedule='@daily',
+    schedule='00 9 * * *',
     start_date=datetime(2025, 10, 14),
     catchup=True,
-    max_active_runs=1,
-) as dag):
+    max_active_runs=1
+) as dag:
 
 
     check_appellation_gsheets_exist = BranchPythonOperator(
@@ -70,82 +69,84 @@ with (DAG(
         python_callable=_get_appellation_ids
     )
 
-
-    start_offres_container_or1 = DockerOperator(
-        task_id = 'start_offres_container_or1',
-        wait_for_downstream = True,
-        api_version = 'auto',
-        image = 'extract-frt-offres:latest',
-        docker_url = 'unix://var/run/docker.sock',
-        network_mode = 'bridge',
-        auto_remove = 'success',
-        mount_tmp_dir = False,
-        environment = {
-            'client_id': Variable.get('france_travail_client_id'),
-            'client_secret': Variable.get('france_travail_client_secret'),
-            'scope': Variable.get('france_travail_scope'),
-            'origin': 1,
-            'query_max_date': "{{ dag_run.logical_date.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
-            'query_min_date': "{{ (dag_run.logical_date - macros.dateutil.relativedelta.relativedelta(months=3)).strftime('%Y-%m-%dT%H:%M:%SZ') }}",
-            'rome_codes': '{{ ti.xcom_pull(task_ids="get_appellation_ids", key="job_interests") }}',
-            'test': '{{ dag_run.logical_date }}'
-        },
-        mounts = [
-            Mount(source='/home/liamv/python_projects/emploi_project/emploi_offres/logs', target='/emploi_offres/logs', type='bind'),
-            Mount(source='/home/liamv/python_projects/emploi_project/downloads', target='/downloads/', type='bind')
-        ]
-    )
-
-
-    start_offres_container_or2 = DockerOperator(
-        task_id='start_offres_container_or2',
-        wait_for_downstream=True,
-        api_version='auto',
-        image='extract-frt-offres:latest',
-        docker_url='unix://var/run/docker.sock',
-        network_mode='bridge',
-        auto_remove='success',
-        mount_tmp_dir=False,
-        environment={
-            'client_id': Variable.get('france_travail_client_id'),
-            'client_secret': Variable.get('france_travail_client_secret'),
-            'scope': Variable.get('france_travail_scope'),
-            'origin': 2,
-            'query_max_date': "{{ dag_run.logical_date.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
-            'query_min_date': "{{ (dag_run.logical_date - macros.dateutil.relativedelta.relativedelta(months=3)).strftime('%Y-%m-%dT%H:%M:%SZ') }}",
-            'rome_codes': '{{ ti.xcom_pull(task_ids="get_appellation_ids", key="job_interests") }}',
-            'test': '{{ dag_run.logical_date }}'
-        },
-        mounts=[
-            Mount(source='/home/liamv/python_projects/emploi_project/emploi_offres/logs', target='/emploi_offres/logs',type='bind'),
-            Mount(source='/home/liamv/python_projects/emploi_project/downloads', target='/downloads/', type='bind')
-        ],
-    )
+    with TaskGroup('data_offers_extraction') as data_offers_extraction:
+        start_offres_container_or1 = DockerOperator(
+            task_id='start_offres_container_or1',
+            wait_for_downstream=False,
+            api_version='auto',
+            image='extract-frt-offres:latest',
+            docker_url='unix://var/run/docker.sock',
+            network_mode='bridge',
+            auto_remove='success',
+            mount_tmp_dir=False,
+            environment={
+                'client_id': Variable.get('france_travail_client_id'),
+                'client_secret': Variable.get('france_travail_client_secret'),
+                'scope': Variable.get('france_travail_scope'),
+                'origin': 1,
+                'query_max_date': "{{ dag_run.logical_date.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
+                'query_min_date': "{{ (dag_run.logical_date - macros.dateutil.relativedelta.relativedelta(months=3)).strftime('%Y-%m-%dT%H:%M:%SZ') }}",
+                'rome_codes': '{{ ti.xcom_pull(task_ids="get_appellation_ids", key="job_interests") }}',
+                'test': '{{ dag_run.logical_date }}'
+            },
+            mounts=[
+                Mount(source='/home/liamv/python_projects/emploi_project/emploi_offres/logs', target='/emploi_offres/logs', type='bind'),
+                Mount(source='/home/liamv/python_projects/emploi_project/downloads', target='/downloads/', type='bind')
+            ]
+        )
 
 
-    store_raw_offres_to_s3 = LocalFilesystemToS3Operator(
-        task_id='store_raw_offres_to_s3',
-        filename='/opt/airflow/frt_offres_download/france_travail_raw_2025.jsonl',
-        dest_key='s3://amzn-s3-frt-offres/raw/france_travail_raw_2025.jsonl',
-        aws_conn_id='aws_ak__exerani_eop',
-        replace=True,
-        gzip=False
-    )
+        start_offres_container_or2 = DockerOperator(
+            task_id='start_offres_container_or2',
+            wait_for_downstream=False,
+            api_version='auto',
+            image='extract-frt-offres:latest',
+            docker_url='unix://var/run/docker.sock',
+            network_mode='bridge',
+            auto_remove='success',
+            mount_tmp_dir=False,
+            environment={
+                'client_id': Variable.get('france_travail_client_id'),
+                'client_secret': Variable.get('france_travail_client_secret'),
+                'scope': Variable.get('france_travail_scope'),
+                'origin': 2,
+                'query_max_date': "{{ dag_run.logical_date.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
+                'query_min_date': "{{ (dag_run.logical_date - macros.dateutil.relativedelta.relativedelta(months=3)).strftime('%Y-%m-%dT%H:%M:%SZ') }}",
+                'rome_codes': '{{ ti.xcom_pull(task_ids="get_appellation_ids", key="job_interests") }}',
+                'test': '{{ dag_run.logical_date }}'
+            },
+            mounts=[
+                Mount(source='/home/liamv/python_projects/emploi_project/emploi_offres/logs', target='/emploi_offres/logs',type='bind'),
+                Mount(source='/home/liamv/python_projects/emploi_project/downloads', target='/downloads/', type='bind')
+            ],
+        )
+        start_offres_container_or1
+        start_offres_container_or2
 
 
-    store_daily_new_id_registry = LocalFilesystemToS3Operator(
-        task_id='store_daily_new_id_registry',
-        filename="/opt/airflow/frt_offres_download/id_registry_{{ dag_run.logical_date | ds_nodash }}.csv",
-        dest_key="s3://amzn-s3-frt-offres/raw/id_registry_{{ dag_run.logical_date | ds_nodash }}.csv",
-        aws_conn_id='aws_ak__exerani_eop',
-        replace=True,
-        gzip=False
-    )
+    with TaskGroup('aws_storage') as aws_storage:
+        store_raw_offres_to_s3 = LocalFilesystemToS3Operator(
+            task_id='store_raw_offres_to_s3',
+            filename='/opt/airflow/frt_offres_download/france_travail_raw_2025.jsonl',
+            dest_key='s3://amzn-s3-frt-offres/raw/france_travail_raw_2025.jsonl',
+            aws_conn_id='aws_ak__exerani_eop',
+            replace=True,
+            gzip=False
+        )
 
 
-    chain(
-        check_appellation_gsheets_exist,
-        get_appellation_ids,
-        [start_offres_container_or1, start_offres_container_or2],
-        [store_raw_offres_to_s3, store_daily_new_id_registry]
-    )
+        store_daily_new_id_registry = LocalFilesystemToS3Operator(
+            task_id='store_daily_new_id_registry',
+            filename="/opt/airflow/frt_offres_download/id_registry_{{ dag_run.logical_date | ds_nodash }}.csv",
+            dest_key="s3://amzn-s3-frt-offres/raw/id_registry_{{ dag_run.logical_date | ds_nodash }}.csv",
+            aws_conn_id='aws_ak__exerani_eop',
+            replace=True,
+            gzip=False,
+
+        )
+        store_raw_offres_to_s3
+        store_daily_new_id_registry
+
+
+    check_appellation_gsheets_exist >> get_appellation_ids >> data_offers_extraction >> aws_storage
+
