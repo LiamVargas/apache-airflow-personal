@@ -84,8 +84,8 @@ with DAG(
                 'client_secret': Variable.get('france_travail_client_secret'),
                 'scope': Variable.get('france_travail_scope'),
                 'origin': 1,
-                'query_max_date': "{{ dag_run.logical_date.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
-                'query_min_date': "{{ (dag_run.logical_date - macros.dateutil.relativedelta.relativedelta(months=3)).strftime('%Y-%m-%dT%H:%M:%SZ') }}",
+                'query_max_date': "{{ dag_run.start_date.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
+                'query_min_date': "{{ (dag_run.start_date - macros.dateutil.relativedelta.relativedelta(months=3)).strftime('%Y-%m-%dT%H:%M:%SZ') }}",
                 'rome_codes': '{{ ti.xcom_pull(task_ids="get_appellation_ids", key="job_interests") }}',
                 'test': '{{ dag_run.logical_date }}'
             },
@@ -110,8 +110,8 @@ with DAG(
                 'client_secret': Variable.get('france_travail_client_secret'),
                 'scope': Variable.get('france_travail_scope'),
                 'origin': 2,
-                'query_max_date': "{{ dag_run.logical_date.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
-                'query_min_date': "{{ (dag_run.logical_date - macros.dateutil.relativedelta.relativedelta(months=3)).strftime('%Y-%m-%dT%H:%M:%SZ') }}",
+                'query_max_date': "{{ dag_run.start_date.strftime('%Y-%m-%dT%H:%M:%SZ') }}",
+                'query_min_date': "{{ (dag_run.start_date - macros.dateutil.relativedelta.relativedelta(months=3)).strftime('%Y-%m-%dT%H:%M:%SZ') }}",
                 'rome_codes': '{{ ti.xcom_pull(task_ids="get_appellation_ids", key="job_interests") }}',
                 'test': '{{ dag_run.logical_date }}'
             },
@@ -137,8 +137,8 @@ with DAG(
 
         store_daily_new_id_registry = LocalFilesystemToS3Operator(
             task_id='store_daily_new_id_registry',
-            filename="/opt/airflow/frt_offres_download/id_registry_{{ dag_run.logical_date | ds_nodash }}.csv",
-            dest_key="s3://amzn-s3-frt-offres/raw/id_registry_{{ dag_run.logical_date | ds_nodash }}.csv",
+            filename="/opt/airflow/frt_offres_download/id_registry_{{ dag_run.start_date | ds_nodash }}.csv",
+            dest_key="s3://amzn-s3-frt-offres/raw/id_registry_{{ dag_run.start_date | ds_nodash }}.csv",
             aws_conn_id='aws_ak__exerani_eop',
             replace=True,
             gzip=False,
