@@ -3,4 +3,4 @@ apache-airflow-providers-amazon
 apache-airflow-providers-docker
 apache-airflow-providers-fab
 apache-airflow-providers-postgres
-duckdb==1.4.0
+duckdb==1.4.2
